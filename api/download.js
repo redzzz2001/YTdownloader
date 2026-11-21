@@ -17,7 +17,11 @@ export default async function handler(req, res) {
             agent = ytdl.createAgent(cookies);
         }
 
-        const info = await ytdl.getInfo(url, { agent });
+        const info = await ytdl.getInfo(url, {
+            agent,
+            playerClients: ['IOS', 'ANDROID', 'TV']
+        });
+
         let chosenFormat;
 
         if (format === 'mp3') {
