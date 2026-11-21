@@ -7,11 +7,17 @@ export default async function handler(req, res) {
 
     const { url, format } = req.body;
     if (!url || !ytdl.validateURL(url)) {
-        return res.status(400).json({ error: 'URL do YouTube inválida.' });
+        return res.status(400).json({ error: 'URL inválida.' });
     }
 
     try {
-        const info = await ytdl.getInfo(url);
+        let agent;
+        if (process.env.YOUTUBE_COOKIES) {
+            const cookies = JSON.parse(process.env.YOUTUBE_COOKIES);
+            agent = ytdl.createAgent(cookies);
+        }
+
+        const info = await ytdl.getInfo(url, { agent });
         let chosenFormat;
 
         if (format === 'mp3') {
@@ -30,16 +36,14 @@ export default async function handler(req, res) {
             throw new Error('Formato não encontrado.');
         }
 
-        // Retorna o link direto em JSON para o frontend
         return res.status(200).json({
             downloadUrl: chosenFormat.url,
             title: info.videoDetails.title
         });
-
     } catch (error) {
         console.error(error);
         return res.status(500).json({
-            error: 'Falha ao extrair o link. O vídeo pode estar restrito ou o YouTube bloqueou o IP do servidor.'
+            error: `Erro: ${error.message}`
         });
     }
 }
