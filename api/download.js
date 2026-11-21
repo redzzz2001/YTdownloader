@@ -1,4 +1,4 @@
-import ytdl from '@distube/ytdl-core';
+import { Innertube } from 'youtubei.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -6,43 +6,34 @@ export default async function handler(req, res) {
     }
 
     const { url, format } = req.body;
-    if (!url || !ytdl.validateURL(url)) {
-        return res.status(400).json({ error: 'URL inválida.' });
+    const match = url?.match(/(?:v=|youtu\.be\/|shorts\/)([a-zA-Z0-9_-]{11})/);
+    const videoId = match ? match[1] : null;
+
+    if (!videoId) {
+        return res.status(400).json({ error: 'URL do YouTube inválida.' });
     }
 
     try {
-        let agent;
-        if (process.env.YOUTUBE_COOKIES) {
-            const cookies = JSON.parse(process.env.YOUTUBE_COOKIES);
-            agent = ytdl.createAgent(cookies);
-        }
-
-        const info = await ytdl.getInfo(url, {
-            agent,
-            playerClients: ['IOS', 'ANDROID', 'TV']
-        });
+        const yt = await Innertube.create();
+        // Emula o cliente iOS/Android para evitar bloqueios do cliente Web
+        const info = await yt.getBasicInfo(videoId, 'IOS');
 
         let chosenFormat;
-
         if (format === 'mp3') {
-            chosenFormat = ytdl.chooseFormat(info.formats, {
-                quality: 'highestaudio',
-                filter: 'audioonly'
-            });
+            chosenFormat = info.chooseFormat({ type: 'audio', quality: 'best' });
         } else {
-            chosenFormat = ytdl.chooseFormat(info.formats, {
-                quality: 'highest',
-                filter: 'audioandvideo'
-            });
+            chosenFormat = info.chooseFormat({ type: 'video+audio', quality: 'best' });
         }
 
-        if (!chosenFormat || !chosenFormat.url) {
-            throw new Error('Formato não encontrado.');
+        const downloadUrl = chosenFormat?.url || chosenFormat?.decipher(yt.session.player);
+
+        if (!downloadUrl) {
+            throw new Error('Link direto não encontrado para este vídeo.');
         }
 
         return res.status(200).json({
-            downloadUrl: chosenFormat.url,
-            title: info.videoDetails.title
+            downloadUrl,
+            title: info.basic_info?.title || 'video'
         });
     } catch (error) {
         console.error(error);
