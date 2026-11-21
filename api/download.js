@@ -1,38 +1,45 @@
-// api/download.js
 import ytdl from '@distube/ytdl-core';
 
 export default async function handler(req, res) {
-    if (req.method !== 'POST') return res.status(405).end();
+    if (req.method !== 'POST') {
+        return res.status(405).json({ error: 'Método não permitido.' });
+    }
 
     const { url, format } = req.body;
-    if (!ytdl.validateURL(url)) {
-        return res.status(400).json({ error: 'URL inválida.' });
+    if (!url || !ytdl.validateURL(url)) {
+        return res.status(400).json({ error: 'URL do YouTube inválida.' });
     }
 
     try {
-        // Pega as informações e o formato desejado
         const info = await ytdl.getInfo(url);
         let chosenFormat;
 
         if (format === 'mp3') {
-            // Para MP3, pega o melhor áudio disponível
-            chosenFormat = ytdl.chooseFormat(info.formats, { quality: 'highestaudio', filter: 'audioonly' });
+            chosenFormat = ytdl.chooseFormat(info.formats, {
+                quality: 'highestaudio',
+                filter: 'audioonly'
+            });
         } else {
-            // Para MP4, tenta pegar um formato que já tenha vídeo e áudio juntos
-            // (nem sempre disponível em alta qualidade, mas é o mais simples para redirecionamento)
-            chosenFormat = ytdl.chooseFormat(info.formats, { quality: 'highest', filter: 'audioandvideo' });
+            chosenFormat = ytdl.chooseFormat(info.formats, {
+                quality: 'highest',
+                filter: 'audioandvideo'
+            });
         }
 
         if (!chosenFormat || !chosenFormat.url) {
-            throw new Error('Formato não encontrado para redirecionamento direto.');
+            throw new Error('Formato não encontrado.');
         }
 
-        // 🔥 A MÁGICA: Redireciona o navegador para a URL direta do stream.
-        // A Vercel não processa o arquivo, apenas aponta o caminho.
-        res.redirect(302, chosenFormat.url);
+        // Retorna o link direto em JSON para o frontend
+        return res.status(200).json({
+            downloadUrl: chosenFormat.url,
+            title: info.videoDetails.title
+        });
 
     } catch (error) {
         console.error(error);
-        res.status(500).json({ error: 'Falha ao extrair o link. O vídeo pode ser restrito.' });
+        return res.status(500).json({
+            error: 'Falha ao extrair o link. O vídeo pode estar restrito ou o YouTube bloqueou o IP do servidor.'
+        });
     }
 }
